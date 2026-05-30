@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARP Visualizer — Goblin Eaters Cyber Cavern</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0e14;
+  --surface: #111520;
+  --surface2: #161b28;
+  --border: #1e2636;
+  --border2: #263040;
+  --text: #c8d4e8;
+  --dim: #6b7f9e;
+  --faint: #3a4a60;
+  --blue: #4a9eff;
+  --blue-dim: #1e3d6e;
+  --green: #3ecf8e;
+  --green-dim: #0e3024;
+  --red: #ff4d6a;
+  --red-dim: #3d0f18;
+  --amber: #ffb340;
+  --amber-dim: #3d2800;
+  --bottom-h: 420px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── HEADER ── */
+.header {
+  height: 52px;
+  flex-shrink: 0;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surface);
+}
+
+.header-title {
+  font-family: 'Syne', sans-serif;
+  font-size: .95rem;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.header-sub {
+  font-size: .58rem;
+  color: var(--dim);
+  margin-top: .1rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.mode-toggle { display: flex; gap: .4rem; }
+
+.mode-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .68rem;
+  padding: .35rem .85rem;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  transition: all .2s;
+}
+.mode-btn:hover { color: var(--text); border-color: var(--dim); }
+.mode-btn.active { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+.mode-btn.active.atk { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+
+/* ── CANVAS AREA ── */
+.canvas-wrap {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+  background-image:
+    radial-gradient(circle at 20% 50%, rgba(74,158,255,.03) 0%, transparent 50%),
+    radial-gradient(circle at 80% 50%, rgba(62,207,142,.03) 0%, transparent 50%);
+}
+
+canvas { display: block; width: 100%; height: 100%; }
+
+/* ── BOTTOM STRIP ── */
+.bottom {
+  height: var(--bottom-h);
+  flex-shrink: 0;
+  display: flex;
+  border-top: 1px solid var(--border);
+}
+
+/* ── FRAME DISSECTOR — 65% ── */
+.dissector {
+  width: 65%;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.dissector-header {
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 .9rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.dissector-title {
+  font-size: .72rem;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.dissector-badge {
+  font-size: .68rem;
+  padding: .14rem .5rem;
+  border-radius: 3px;
+  letter-spacing: .06em;
+}
+.dissector-badge.normal { background: var(--blue-dim); color: var(--blue); border: 1px solid var(--blue); }
+.dissector-badge.attack { background: var(--red-dim); color: var(--red); border: 1px solid var(--red); }
+.dissector-badge.empty  { background: transparent; color: var(--faint); border: 1px solid var(--faint); }
+
+.dissector-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+}
+
+/* Placeholder when no frame */
+.frame-placeholder {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: .4rem;
+  color: var(--faint);
+}
+
+.frame-placeholder .ph-icon {
+  font-size: 1.8rem;
+  opacity: .3;
+}
+
+.frame-placeholder .ph-text {
+  font-size: .78rem;
+  letter-spacing: .06em;
+}
+
+/* Frame table */
+.frame-table-wrap {
+  flex: 1;
+  overflow: auto;
+  padding: .3rem .5rem;
+}
+
+table.ft {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .75rem;
+}
+
+table.ft th {
+  text-align: left;
+  color: var(--dim);
+  font-size: .66rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: .25rem .5rem;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+
+table.ft td {
+  padding: .28rem .5rem;
+  border-bottom: 1px solid #151c28;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+table.ft tr:last-child td { border-bottom: none; }
+
+.ft-section td {
+  font-size: .62rem;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  padding: .28rem .5rem .12rem;
+  background: var(--bg);
+}
+
+.ft-eth td { background: rgba(74,158,255,.03); }
+.ft-arp td { background: rgba(181,122,255,.03); }
+
+.ft .fn { color: var(--dim); width: 148px; }
+.ft .fh { color: var(--faint); width: 130px; font-size: .68rem; font-family: 'JetBrains Mono'; }
+.ft .fv { color: var(--text); }
+.ft .fv2 { color: var(--green); }
+
+.ft tr.lie .fn::before { content: '⚠ '; color: var(--red); }
+.ft tr.lie .fv { color: var(--red); font-weight: 600; }
+
+.lie-badge {
+  display: inline-block;
+  font-size: .6rem;
+  background: var(--red-dim);
+  color: var(--red);
+  border: 1px solid var(--red);
+  border-radius: 2px;
+  padding: .04rem .32rem;
+  margin-left: .35rem;
+  vertical-align: middle;
+}
+
+.truth-badge {
+  display: inline-block;
+  font-size: .6rem;
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 2px;
+  padding: .04rem .32rem;
+  margin-left: .35rem;
+  vertical-align: middle;
+}
+
+.ft-note td {
+  font-size: .68rem;
+  color: var(--amber);
+  padding: .3rem .5rem;
+  border-top: 1px solid var(--border);
+  white-space: normal;
+}
+
+/* ── STEP PANEL — 35% ── */
+.step-panel {
+  width: 35%;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* Navigation — pinned top */
+.nav-strip {
+  flex-shrink: 0;
+  padding: .55rem .8rem .45rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+
+.step-counter {
+  font-size: .7rem;
+  color: var(--dim);
+  text-align: center;
+  letter-spacing: .05em;
+}
+
+.step-dots {
+  display: flex;
+  gap: .18rem;
+  justify-content: center;
+}
+
+.dot {
+  flex: 1;
+  max-width: 24px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--faint);
+  transition: background .25s;
+}
+.dot.done     { background: var(--blue); }
+.dot.done.atk { background: var(--red); }
+.dot.current  { background: var(--amber); }
+
+.nav-btns {
+  display: flex;
+  gap: .35rem;
+}
+
+.nbtn {
+  flex: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .75rem;
+  padding: .45rem .2rem;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: all .18s;
+  text-align: center;
+}
+.nbtn:hover { border-color: var(--dim); color: var(--blue); }
+.nbtn:disabled { opacity: .25; cursor: not-allowed; }
+.nbtn.primary { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); }
+.nbtn.primary:hover { background: rgba(74,158,255,.2); }
+.nbtn.primary.atk { background: var(--red-dim); border-color: var(--red); color: var(--red); }
+
+.auto-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: .73rem;
+  padding: .38rem;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  transition: all .18s;
+  width: 100%;
+}
+.auto-btn:hover { color: var(--text); border-color: var(--dim); }
+.auto-btn.running { color: var(--amber); border-color: var(--amber); }
+
+/* Step explanation */
+.step-explain {
+  flex: 1;
+  padding: .7rem .9rem;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+
+.step-explain.empty {
+  align-items: center;
+  justify-content: center;
+  color: var(--faint);
+  font-size: .78rem;
+  text-align: center;
+  line-height: 1.7;
+}
+
+.step-lbl {
+  font-size: .67rem;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  margin-bottom: .05rem;
+}
+.step-lbl.normal { color: var(--blue); }
+.step-lbl.attack { color: var(--red); }
+.step-lbl.warn   { color: var(--amber); }
+.step-lbl.good   { color: var(--green); }
+
+.step-msg {
+  font-size: .92rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.step-det {
+  font-size: .78rem;
+  color: var(--dim);
+  line-height: 1.7;
+  flex: 1;
+}
+
+/* ARP cache */
+.cache-strip {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  padding: .35rem .9rem;
+  display: none;
+}
+.cache-strip.visible { display: block; }
+.cache-title {
+  font-size: .66rem;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  margin-bottom: .25rem;
+}
+.cache-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: .74rem;
+  padding: .15rem 0;
+  gap: .4rem;
+}
+.cache-row .cip  { color: var(--blue); }
+.cache-row .cmac { color: var(--green); font-size: .7rem; }
+.cache-row.poisoned .cmac { color: var(--red); animation: flash .5s ease; }
+@keyframes flash { 0%,100%{opacity:1} 50%{opacity:.1} }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">ARP Protocol Visualizer</div>
+    <div class="header-sub">Layer 2 · Address Resolution Protocol · Week 2 · Goblin Eaters Cyber Cavern</div>
+  </div>
+  <div class="mode-toggle">
+    <button class="mode-btn active" id="btnNormal" onclick="setMode('normal')">Normal Flow</button>
+    <button class="mode-btn" id="btnAttack" onclick="setMode('attack')">ARP Poisoning</button>
+  </div>
+</div>
+
+<div class="canvas-wrap">
+  <canvas id="c"></canvas>
+</div>
+
+<div class="bottom">
+
+  <!-- FRAME DISSECTOR -->
+  <div class="dissector">
+    <div class="dissector-header">
+      <div class="dissector-title" id="dissTitle">Ethernet Frame + ARP Payload</div>
+      <div class="dissector-badge empty" id="dissBadge">No frame this step</div>
+    </div>
+    <div class="dissector-body" id="dissBody">
+      <div class="frame-placeholder" id="framePlaceholder">
+        <div class="ph-icon">⬡</div>
+        <div class="ph-text">Frame dissector active on packet steps</div>
+      </div>
+      <div class="frame-table-wrap" id="frameTableWrap" style="display:none">
+        <table class="ft" id="frameTable">
+          <thead>
+            <tr>
+              <th class="fn">Field</th>
+              <th class="fh">Hex</th>
+              <th id="thSent">Value</th>
+              <th id="thTruth" style="display:none">Honest Value</th>
+            </tr>
+          </thead>
+          <tbody id="frameTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP PANEL -->
+  <div class="step-panel">
+
+    <div class="nav-strip">
+      <div class="step-counter" id="stepCounter">Ready — click Next to begin</div>
+      <div class="step-dots" id="stepDots"></div>
+      <div class="nav-btns">
+        <button class="nbtn" id="btnPrev" onclick="prevStep()" disabled>← Prev</button>
+        <button class="nbtn primary" id="btnNext" onclick="nextStep()">Next →</button>
+        <button class="nbtn" onclick="resetAll()">Reset</button>
+      </div>
+      <button class="auto-btn" id="btnAuto" onclick="toggleAuto()">▶ Auto Play</button>
+    </div>
+
+    <div class="step-explain empty" id="stepExplain">
+      Select a mode above and click Next to begin.
+    </div>
+
+    <div class="cache-strip" id="cacheStrip">
+      <div class="cache-title">Host A — ARP Cache</div>
+      <div id="cacheRows"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// FRAME DATA
+// ═══════════════════════════════════════════════════════
+const FRAMES = {
+  arpRequest: {
+    title: 'ARP Request Frame',
+    badge: 'normal', badgeText: 'Legitimate Request',
+    showTruth: false,
+    sections: [
+      { label: 'Ethernet II Header', cls: 'ft-eth', rows: [
+        { field: 'Destination MAC', hex: 'ff ff ff ff ff ff', sent: 'FF:FF:FF:FF:FF:FF', note: 'Broadcast — all devices on the L2 domain receive this' },
+        { field: 'Source MAC',      hex: 'aa bb cc 11 22 33', sent: 'AA:BB:CC:11:22:33', note: 'Host A — the requester' },
+        { field: 'EtherType',       hex: '08 06',             sent: '0x0806 = ARP',      note: 'Identifies this as an ARP frame' },
+      ]},
+      { label: 'ARP Payload', cls: 'ft-arp', rows: [
+        { field: 'Hardware Type',   hex: '00 01', sent: '1 = Ethernet' },
+        { field: 'Protocol Type',   hex: '08 00', sent: '0x0800 = IPv4' },
+        { field: 'Operation',       hex: '00 01', sent: '1 = Request',         note: 'This is a question, not an answer' },
+        { field: 'Sender MAC',      hex: 'aa bb cc 11 22 33', sent: 'AA:BB:CC:11:22:33', note: 'Host A identifies itself honestly' },
+        { field: 'Sender IP',       hex: 'c0 a8 01 0a',       sent: '192.168.1.10' },
+        { field: 'Target MAC',      hex: '00 00 00 00 00 00', sent: '00:00:00:00:00:00', note: 'Unknown — this is what we are asking for' },
+        { field: 'Target IP',       hex: 'c0 a8 01 14',       sent: '192.168.1.20',      note: 'The IP address we want to resolve' },
+      ]},
+    ]
+  },
+  arpReply: {
+    title: 'ARP Reply Frame (Legitimate)',
+    badge: 'normal', badgeText: 'Legitimate Reply',
+    showTruth: false,
+    sections: [
+      { label: 'Ethernet II Header', cls: 'ft-eth', rows: [
+        { field: 'Destination MAC', hex: 'aa bb cc 11 22 33', sent: 'AA:BB:CC:11:22:33', note: 'Unicast — only Host A receives this' },
+        { field: 'Source MAC',      hex: 'dd ee ff 44 55 66', sent: 'DD:EE:FF:44:55:66', note: 'Host B — the legitimate owner of 192.168.1.20' },
+        { field: 'EtherType',       hex: '08 06',             sent: '0x0806 = ARP' },
+      ]},
+      { label: 'ARP Payload', cls: 'ft-arp', rows: [
+        { field: 'Hardware Type',   hex: '00 01', sent: '1 = Ethernet' },
+        { field: 'Protocol Type',   hex: '08 00', sent: '0x0800 = IPv4' },
+        { field: 'Operation',       hex: '00 02', sent: '2 = Reply',           note: 'This is the answer' },
+        { field: 'Sender MAC',      hex: 'dd ee ff 44 55 66', sent: 'DD:EE:FF:44:55:66', note: 'Host B\'s real MAC — this is what gets cached' },
+        { field: 'Sender IP',       hex: 'c0 a8 01 14',       sent: '192.168.1.20' },
+        { field: 'Target MAC',      hex: 'aa bb cc 11 22 33', sent: 'AA:BB:CC:11:22:33' },
+        { field: 'Target IP',       hex: 'c0 a8 01 0a',       sent: '192.168.1.10' },
+      ]},
+    ]
+  },
+  fakeReply: {
+    title: 'ARP Reply Frame — Attacker',
+    badge: 'attack', badgeText: 'POISONED REPLY',
+    showTruth: true,
+    note: 'Two fields are false — Sender MAC and Sender IP. ARP verifies neither. The frame is structurally valid and indistinguishable from a legitimate reply.',
+    sections: [
+      { label: 'Ethernet II Header', cls: 'ft-eth', rows: [
+        { field: 'Destination MAC', hex: 'aa bb cc 11 22 33', sent: 'AA:BB:CC:11:22:33', truth: 'AA:BB:CC:11:22:33', lie: false, note: 'Correct — addressed to Host A' },
+        { field: 'Source MAC',      hex: 'de ad be ef 00 01', sent: 'DE:AD:BE:EF:00:01', truth: 'DD:EE:FF:44:55:66', lie: true,  note: 'Attacker\'s real MAC — not Host B\'s' },
+        { field: 'EtherType',       hex: '08 06',             sent: '0x0806 = ARP',      truth: '0x0806 = ARP',      lie: false },
+      ]},
+      { label: 'ARP Payload', cls: 'ft-arp', rows: [
+        { field: 'Hardware Type',   hex: '00 01', sent: '1 = Ethernet',   truth: '1 = Ethernet',   lie: false },
+        { field: 'Protocol Type',   hex: '08 00', sent: '0x0800 = IPv4',  truth: '0x0800 = IPv4',  lie: false },
+        { field: 'Operation',       hex: '00 02', sent: '2 = Reply',      truth: '2 = Reply',      lie: false },
+        { field: 'Sender MAC',      hex: 'de ad be ef 00 01', sent: 'DE:AD:BE:EF:00:01', truth: 'DD:EE:FF:44:55:66', lie: true,
+          note: 'LIE 1 — attacker\'s MAC paired with Host B\'s IP. This is what Host A caches.' },
+        { field: 'Sender IP',       hex: 'c0 a8 01 14', sent: '192.168.1.20', truth: '192.168.1.99', lie: true,
+          note: 'SECOND LIE — attacker\'s real IP is 192.168.1.99. ARP does not verify the claimed IP against the sender\'s actual address.' },
+        { field: 'Target MAC',      hex: 'aa bb cc 11 22 33', sent: 'AA:BB:CC:11:22:33', truth: 'AA:BB:CC:11:22:33', lie: false },
+        { field: 'Target IP',       hex: 'c0 a8 01 0a',       sent: '192.168.1.10',      truth: '192.168.1.10',      lie: false },
+      ]},
+    ]
+  },
+  fakeReply2: {
+    title: 'ARP Reply Frame — Attacker (to Host B)',
+    badge: 'attack', badgeText: 'POISONED REPLY',
+    showTruth: true,
+    note: 'Same mechanism, opposite direction. Two fields are false — Sender MAC and Sender IP. Host B will cache the attacker\'s MAC against Host A\'s IP. ARP verifies neither claim.',
+    sections: [
+      { label: 'Ethernet II Header', cls: 'ft-eth', rows: [
+        { field: 'Destination MAC', hex: 'dd ee ff 44 55 66', sent: 'DD:EE:FF:44:55:66', truth: 'DD:EE:FF:44:55:66', lie: false, note: 'Correct — addressed to Host B' },
+        { field: 'Source MAC',      hex: 'de ad be ef 00 01', sent: 'DE:AD:BE:EF:00:01', truth: 'AA:BB:CC:11:22:33', lie: true,  note: 'Attacker\'s real MAC — not Host A\'s' },
+        { field: 'EtherType',       hex: '08 06',             sent: '0x0806 = ARP',      truth: '0x0806 = ARP',      lie: false },
+      ]},
+      { label: 'ARP Payload', cls: 'ft-arp', rows: [
+        { field: 'Hardware Type',   hex: '00 01', sent: '1 = Ethernet',  truth: '1 = Ethernet',  lie: false },
+        { field: 'Protocol Type',   hex: '08 00', sent: '0x0800 = IPv4', truth: '0x0800 = IPv4', lie: false },
+        { field: 'Operation',       hex: '00 02', sent: '2 = Reply',     truth: '2 = Reply',     lie: false },
+        { field: 'Sender MAC',      hex: 'de ad be ef 00 01', sent: 'DE:AD:BE:EF:00:01', truth: 'AA:BB:CC:11:22:33', lie: true,
+          note: 'LIE 1 — attacker\'s MAC paired with Host A\'s IP. This is what Host B caches.' },
+        { field: 'Sender IP',       hex: 'c0 a8 01 0a', sent: '192.168.1.10', truth: '192.168.1.99', lie: true,
+          note: 'SECOND LIE — attacker\'s real IP is 192.168.1.99. ARP does not verify the claimed IP against the sender\'s actual address.' },
+        { field: 'Target MAC',      hex: 'dd ee ff 44 55 66', sent: 'DD:EE:FF:44:55:66', truth: 'DD:EE:FF:44:55:66', lie: false },
+        { field: 'Target IP',       hex: 'c0 a8 01 14',       sent: '192.168.1.20',      truth: '192.168.1.20',      lie: false },
+      ]},
+    ]
+  },
+  normalData: {
+    title: 'Ethernet Data Frame — Correctly Delivered',
+    badge: 'normal', badgeText: 'Normal Traffic',
+    showTruth: false,
+    note: 'ARP resolution is complete. This is ordinary data traffic — not ARP. Host A addresses frames directly to Host B\'s MAC for the lifetime of the cache entry.',
+    sections: [
+      { label: 'Ethernet II Header', cls: 'ft-eth', rows: [
+        { field: 'Destination MAC', hex: 'dd ee ff 44 55 66', sent: 'DD:EE:FF:44:55:66', note: 'Host B\'s real MAC — resolved correctly by ARP and cached' },
+        { field: 'Source MAC',      hex: 'aa bb cc 11 22 33', sent: 'AA:BB:CC:11:22:33', note: 'Host A' },
+        { field: 'EtherType',       hex: '08 00',             sent: '0x0800 = IPv4',      note: 'IP data frame — not ARP' },
+      ]},
+      { label: 'IP Header (inside the Ethernet frame)', cls: 'ft-arp', rows: [
+        { field: 'Source IP',      hex: 'c0 a8 01 0a', sent: '192.168.1.10',      note: 'Host A' },
+        { field: 'Destination IP', hex: 'c0 a8 01 14', sent: '192.168.1.20',      note: 'Host B — MAC and IP both correct' },
+        { field: 'Payload',        hex: '...',          sent: '[application data]', note: 'HTTP, SSH, file transfer — whatever the application is sending' },
+      ]},
+    ]
+  },
+  misdirectedData: {
+    title: 'Ethernet Data Frame — Misdirected',
+    badge: 'attack', badgeText: 'MISDIRECTED',
+    showTruth: true,
+    note: 'This is not an ARP frame — it is ordinary data traffic. Host A composed it correctly based on its cache. The switch delivered it correctly based on the MAC. The poisoned cache entry is the only reason it arrives at the attacker.',
+    sections: [
+      { label: 'Ethernet II Header', cls: 'ft-eth', rows: [
+        { field: 'Destination MAC', hex: 'de ad be ef 00 01', sent: 'DE:AD:BE:EF:00:01', truth: 'DD:EE:FF:44:55:66', lie: true,
+          note: 'Host A looked up 192.168.1.20 in its cache — found the attacker\'s MAC. The cache is wrong; the frame is not.' },
+        { field: 'Source MAC',      hex: 'aa bb cc 11 22 33', sent: 'AA:BB:CC:11:22:33', truth: 'AA:BB:CC:11:22:33', lie: false, note: 'Host A — correct' },
+        { field: 'EtherType',       hex: '08 00',             sent: '0x0800 = IPv4',      truth: '0x0800 = IPv4',      lie: false, note: 'This is an IP data frame, not ARP' },
+      ]},
+      { label: 'IP Header (inside the Ethernet frame)', cls: 'ft-arp', rows: [
+        { field: 'Source IP',       hex: 'c0 a8 01 0a', sent: '192.168.1.10',  truth: '192.168.1.10',  lie: false, note: 'Host A\'s IP — correct' },
+        { field: 'Destination IP',  hex: 'c0 a8 01 14', sent: '192.168.1.20',  truth: '192.168.1.20',  lie: false, note: 'Host B\'s IP — correct. IP addresses are right. Only the MAC is wrong.' },
+        { field: 'Payload',         hex: '...',          sent: '[application data]', truth: '[application data]', lie: false, note: 'Could be HTTP, SSH, credentials — anything Host A is sending to what it believes is Host B' },
+      ]},
+    ]
+  }
+};
+
+// ═══════════════════════════════════════════════════════
+// STEPS
+// ═══════════════════════════════════════════════════════
+const normalSteps = [
+  {
+    type: 'normal', from: 'hostA', to: 'sw',
+    packet: { color: '#4a9eff', label: 'REQ' }, broadcast: true, frame: 'arpRequest',
+    log: { type: 'normal', lbl: 'ARP Request — Broadcast',
+      msg: 'Host A broadcasts: "Who has 192.168.1.20?"',
+      det: 'Sent to FF:FF:FF:FF:FF:FF — every device on the L2 domain receives this frame. Host A is asking for a MAC address so it can send frames directly.' }
+  },
+  {
+    type: 'normal', from: 'sw', to: 'all',
+    packet: { color: '#4a9eff', label: 'REQ' },
+    log: { type: 'normal', lbl: 'Switch Floods Frame',
+      msg: 'Switch forwards the broadcast to all ports',
+      det: 'No routing decision is made. The switch floods FF:FF:FF:FF:FF:FF to every connected device. Host B, and every other device on the L2 domain, receives the request.' }
+  },
+  {
+    type: 'normal', from: 'hostB', to: 'hostA', via: 'sw',
+    packet: { color: '#3ecf8e', label: 'REP' }, frame: 'arpReply',
+    log: { type: 'good', lbl: 'ARP Reply — Unicast',
+      msg: 'Host B replies: "192.168.1.20 is at DD:EE:FF:44:55:66"',
+      det: 'Unicast reply sent directly to Host A\'s MAC address. Only Host A receives this frame. Host B\'s real MAC address is in the Sender MAC field.' }
+  },
+  {
+    type: 'normal', from: null, to: null,
+    frame: null,
+    cacheA: [{ ip: '192.168.1.20', mac: 'DD:EE:FF:44:55:66', poisoned: false }],
+    log: { type: 'good', lbl: 'ARP Cache Updated',
+      msg: 'Host A caches the mapping: 192.168.1.20 → DD:EE:FF:44:55:66',
+      det: 'This entry persists for 2–20 minutes. Future frames to 192.168.1.20 go directly without a broadcast — until the cache entry expires.' }
+  },
+  {
+    type: 'normal', from: 'hostA', to: 'hostB', via: 'sw',
+    packet: { color: '#3ecf8e', label: 'DATA' },
+    frame: 'normalData',
+    log: { type: 'good', lbl: 'Communication Established',
+      msg: 'Host A sends frames directly to DD:EE:FF:44:55:66',
+      det: 'The ARP resolution is complete. Host A addresses every frame to Host B\'s cached MAC. The switch forwards based on its own MAC table. No further broadcasts needed.' }
+  },
+];
+
+const attackSteps = [
+  {
+    type: 'normal', from: 'hostA', to: 'sw',
+    packet: { color: '#4a9eff', label: 'REQ' }, broadcast: true, frame: 'arpRequest',
+    log: { type: 'normal', lbl: 'ARP Request — Broadcast',
+      msg: 'Host A broadcasts: "Who has 192.168.1.20?"',
+      det: 'The broadcast goes to every device on the L2 domain — including the attacker. ARP has no way to restrict who can receive or respond to this request.' }
+  },
+  {
+    type: 'warn', from: 'sw', to: 'all',
+    packet: { color: '#4a9eff', label: 'REQ' },
+    log: { type: 'warn', lbl: 'Broadcast Received — By Everyone',
+      msg: 'Every device received this frame. Host B got it. So did the attacker.',
+      det: 'Nothing was intercepted. ARP has no concept of authorized responders. Any device on the L2 domain can reply to any ARP request — and the replier does not need to be the legitimate owner of the IP address. The attacker simply chose to answer.' }
+  },
+  {
+    type: 'normal', from: 'hostB', to: 'hostA', via: 'sw',
+    packet: { color: '#3ecf8e', label: 'REP' }, frame: 'arpReply',
+    log: { type: 'good', lbl: 'Host B Replies — Legitimately',
+      msg: 'Host B sends a valid reply: "192.168.1.20 is at DD:EE:FF:44:55:66"',
+      det: 'Host B is the rightful owner of 192.168.1.20 and replies honestly. This is a structurally correct ARP reply. Host A receives it first and caches the correct mapping — but the race is not over yet.' }
+  },
+  {
+    type: 'normal', from: null, to: null,
+    frame: null,
+    cacheA: [{ ip: '192.168.1.20', mac: 'DD:EE:FF:44:55:66', poisoned: false }],
+    log: { type: 'good', lbl: 'Cache Correct — For Now',
+      msg: 'Host A caches the legitimate mapping: 192.168.1.20 → DD:EE:FF:44:55:66',
+      det: 'The correct entry is in place. If nothing else happened, communication would proceed normally. But ARP will accept any reply that arrives — including one that comes after this.' }
+  },
+  {
+    type: 'attack', from: 'attacker', to: 'hostA', via: 'sw',
+    packet: { color: '#ff4d6a', label: 'FAKE' }, frame: 'fakeReply',
+    log: { type: 'attack', lbl: 'Attacker Replies — After Host B',
+      msg: 'Attacker claims: "192.168.1.20 is at DE:AD:BE:EF:00:01"',
+      det: 'The attacker doesn\'t need to be faster than Host B — they need to arrive last. ARP has no concept of "first reply wins." Every reply overwrites the cache. The attacker waits for Host B to reply, then sends their fake reply immediately after.' }
+  },
+  {
+    type: 'attack', from: null, to: null,
+    frame: null,
+    cacheA: [{ ip: '192.168.1.20', mac: 'DE:AD:BE:EF:00:01', poisoned: true }],
+    log: { type: 'attack', lbl: 'Host B Lost The Race',
+      msg: 'Host A overwrites the cache: 192.168.1.20 → DE:AD:BE:EF:00:01',
+      det: 'Host B replied correctly and on time — it didn\'t matter. ARP operates on last-write-wins with no authentication. The attacker\'s reply arrived after Host B\'s and silently replaced the correct entry. Host B lost the race.' }
+  },
+  {
+    type: 'attack', from: 'attacker', to: 'hostB', via: 'sw',
+    packet: { color: '#ff4d6a', label: 'FAKE' },
+    frame: 'fakeReply2',
+    log: { type: 'attack', lbl: 'Bidirectional Poisoning',
+      msg: 'Attacker also claims: "192.168.1.10 is at DE:AD:BE:EF:00:01"',
+      det: 'A second false reply goes to Host B. For traffic to flow through the attacker in both directions, both hosts need poisoned caches. The attacker can also send these unsolicited — a gratuitous ARP needs no prior request.' }
+  },
+  {
+    type: 'attack', misdirect: true, from: 'hostA', to: 'hostB',
+    packet: { color: '#4a9eff', label: 'DATA' },
+    frame: 'misdirectedData',
+    log: { type: 'attack', lbl: 'Frame Misdirected — Attacker In The Path',
+      msg: 'Host A\'s frame intended for Host B is delivered to the attacker.',
+      det: 'The switch did nothing wrong — it delivered the frame exactly as addressed. Host A did nothing wrong — it addressed the frame to the MAC in its cache. The failure was accepting an unauthenticated ARP reply. The attacker reads or modifies the traffic before forwarding it to Host B.' }
+  },
+];
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+let mode = 'normal';
+let steps = normalSteps;
+let currentStep = -1;
+let autoTimer = null;
+let packets = [];
+let rings = [];
+let replayTimer = null;   // repeating packet/ring replay for current step
+let replaySpec = null;    // { s } — the step to re-animate
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+const nodes = {
+  hostA:    { label: 'Host A',   sub: '192.168.1.10', mac: 'AA:BB:CC:11:22:33', col: '#4a9eff', rx: .13, ry: .45 },
+  sw:       { label: 'Switch',   sub: 'L2 Device',    mac: null,                 col: '#6b7f9e', rx: .5,  ry: .45 },
+  hostB:    { label: 'Host B',   sub: '192.168.1.20', mac: 'DD:EE:FF:44:55:66', col: '#3ecf8e', rx: .87, ry: .45 },
+  attacker: { label: 'Attacker', sub: '192.168.1.99', mac: 'DE:AD:BE:EF:00:01', col: '#ff4d6a', rx: .5,  ry: .15, hidden: true },
+};
+
+// ═══════════════════════════════════════════════════════
+// CANVAS
+// ═══════════════════════════════════════════════════════
+function resize() {
+  const wrap = canvas.parentElement;
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+}
+
+function gp(key) {
+  const n = nodes[key];
+  return { x: n.rx * canvas.width, y: n.ry * canvas.height };
+}
+
+function drawGrid() {
+  ctx.save();
+  ctx.strokeStyle = '#0e1219';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < canvas.width; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+  }
+  for (let y = 0; y < canvas.height; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawLink(ak, bk, active, color, dashed) {
+  const a = gp(ak), b = gp(bk);
+  ctx.save();
+  ctx.strokeStyle = active ? color : '#1a2030';
+  ctx.lineWidth = active ? 2 : 1;
+  if (dashed) ctx.setLineDash([5, 4]);
+  if (active) { ctx.shadowColor = color; ctx.shadowBlur = 10; }
+  ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  ctx.restore();
+}
+
+function drawNode(key) {
+  const n = nodes[key];
+  if (n.hidden && (mode !== 'attack' || currentStep < 0)) return;
+
+  const { x, y } = gp(key);
+  const step = currentStep >= 0 ? steps[currentStep] : null;
+  const active = step && (step.from === key || step.to === key || step.via === key);
+  const r = key === 'sw' ? 20 : 26;
+
+  ctx.save();
+  if (active) {
+    const g = ctx.createRadialGradient(x, y, r, x, y, r * 3);
+    g.addColorStop(0, n.col + '30'); g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(x, y, r * 3, 0, Math.PI * 2); ctx.fill();
+  }
+
+  if (key === 'sw') {
+    ctx.fillStyle = '#13182a';
+    ctx.strokeStyle = active ? n.col : '#20304a';
+    ctx.lineWidth = active ? 2 : 1;
+    ctx.beginPath(); ctx.roundRect(x - 28, y - 16, 56, 32, 4); ctx.fill(); ctx.stroke();
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = active ? n.col : '#2a3a50';
+      ctx.fillRect(x - 18 + i * 11, y + 4, 7, 4);
+    }
+  } else {
+    ctx.fillStyle = '#13182a';
+    ctx.strokeStyle = active ? n.col : '#20304a';
+    ctx.lineWidth = active ? 2 : 1;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i - Math.PI / 6;
+      const px = x + r * Math.cos(a), py = y + r * Math.sin(a);
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = active ? n.col : '#2a3a50';
+    ctx.beginPath(); ctx.arc(x, y - 5, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillRect(x - 8, y + 1, 16, 3);
+    ctx.fillRect(x - 10, y + 6, 20, 2);
+  }
+
+  ctx.fillStyle = active ? n.col : '#5a6a80';
+  ctx.font = `600 11px 'JetBrains Mono'`;
+  ctx.textAlign = 'center';
+  ctx.fillText(n.label, x, y + r + 15);
+  ctx.fillStyle = '#3a4a60';
+  ctx.font = `400 9px 'JetBrains Mono'`;
+  ctx.fillText(n.sub, x, y + r + 27);
+  if (n.mac) {
+    ctx.fillStyle = '#253040';
+    ctx.font = `400 8px 'JetBrains Mono'`;
+    ctx.fillText(n.mac, x, y + r + 37);
+  }
+  ctx.restore();
+}
+
+function updatePackets() {
+  packets = packets.filter(p => !p.done);
+  packets.forEach(p => { p.t = Math.min(1, p.t + .022); if (p.t >= 1) p.done = true; });
+}
+
+function drawPackets() {
+  packets.forEach(p => {
+    const x = p.fx + (p.tx - p.fx) * p.t;
+    const y = p.fy + (p.ty - p.fy) * p.t;
+    ctx.save();
+    ctx.shadowColor = p.color; ctx.shadowBlur = 14;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0b0e14';
+    ctx.font = `bold 6px 'JetBrains Mono'`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(p.label, x, y);
+    ctx.restore();
+  });
+}
+
+function updateRings() {
+  rings = rings.filter(r => r.alpha > 0);
+  rings.forEach(r => { r.radius += 2.5; r.alpha = Math.max(0, 1 - (r.radius - 30) / 80); });
+}
+
+function drawRings() {
+  rings.forEach(r => {
+    ctx.save();
+    ctx.strokeStyle = r.color;
+    ctx.globalAlpha = r.alpha * .55;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  });
+}
+
+function spawnPacket(fk, tk, color, label, delay) {
+  const f = gp(fk), t = gp(tk);
+  setTimeout(() => packets.push({ fx: f.x, fy: f.y, tx: t.x, ty: t.y, color, label, t: 0, done: false }), delay || 0);
+}
+
+function spawnRing(fk, color, delay) {
+  const p = gp(fk);
+  setTimeout(() => rings.push({ x: p.x, y: p.y, radius: 28, color, alpha: 1 }), delay || 0);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawGrid();
+
+  const step = currentStep >= 0 ? steps[currentStep] : null;
+  const isAtk = mode === 'attack';
+
+  drawLink('hostA', 'sw', false, '', false);
+  drawLink('sw', 'hostB', false, '', false);
+  if (isAtk) drawLink('attacker', 'sw', false, '', true);
+
+  if (step) {
+    const ac = step.type === 'attack' ? '#ff4d6a' : step.type === 'warn' ? '#ffb340' : '#4a9eff';
+    if (step.from === 'hostA' && !step.misdirect) drawLink('hostA', 'sw', true, ac, false);
+    if (step.from === 'hostB') drawLink('hostB', 'sw', true, '#3ecf8e', false);
+    if (step.from === 'attacker') drawLink('attacker', 'sw', true, '#ff4d6a', true);
+    if (step.to === 'hostA') drawLink('sw', 'hostA', true, ac, false);
+    if (step.to === 'hostB' || step.to === 'all') drawLink('sw', 'hostB', true, ac, false);
+    if (step.to === 'attacker') drawLink('sw', 'attacker', true, '#ff4d6a', true);
+    if (step.to === 'all' && isAtk) drawLink('sw', 'attacker', true, '#ff4d6a', true);
+    // Misdirect step: full relay hostA→sw (blue), sw→attacker (red), attacker→sw (red), sw→hostB (red)
+    if (step.misdirect) {
+      drawLink('hostA',    'sw',       true, '#4a9eff',  false);
+      drawLink('sw',       'attacker', true, '#ff4d6a',  true);
+      drawLink('attacker', 'sw',       true, '#ff4d6a',  true);
+      drawLink('sw',       'hostB',    true, '#ff4d6a',  false);
+    }
+  }
+
+  drawRings();
+  drawPackets();
+  Object.keys(nodes).forEach(k => drawNode(k));
+}
+
+let rafId;
+function loop() { updatePackets(); updateRings(); draw(); rafId = requestAnimationFrame(loop); }
+
+// ═══════════════════════════════════════════════════════
+// FRAME DISSECTOR
+// ═══════════════════════════════════════════════════════
+function showFrame(key) {
+  const placeholder = document.getElementById('framePlaceholder');
+  const tableWrap = document.getElementById('frameTableWrap');
+  const badge = document.getElementById('dissBadge');
+  const title = document.getElementById('dissTitle');
+
+  if (!key) {
+    placeholder.style.display = 'flex';
+    tableWrap.style.display = 'none';
+    title.textContent = 'Ethernet Frame + ARP Payload';
+    badge.textContent = 'No frame this step';
+    badge.className = 'dissector-badge empty';
+    return;
+  }
+
+  const f = FRAMES[key];
+  if (!f) return;
+
+  placeholder.style.display = 'none';
+  tableWrap.style.display = 'block';
+
+  title.textContent = f.title;
+  badge.textContent = f.badgeText;
+  badge.className = 'dissector-badge ' + f.badge;
+
+  document.getElementById('thTruth').style.display = f.showTruth ? '' : 'none';
+  document.getElementById('thSent').textContent = f.showTruth ? 'Sent Value' : 'Value';
+
+  const tbody = document.getElementById('frameTbody');
+  tbody.innerHTML = '';
+
+  f.sections.forEach(sec => {
+    const lr = document.createElement('tr');
+    lr.className = 'ft-section';
+    lr.innerHTML = `<td colspan="4">${sec.label}</td>`;
+    tbody.appendChild(lr);
+
+    sec.rows.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.className = sec.cls + (row.lie ? ' lie' : '');
+      const lieBadge = row.lie ? `<span class="lie-badge">FALSIFIED</span>` : '';
+      let truthCell = '';
+      if (f.showTruth) {
+        truthCell = row.lie
+          ? `<td class="fv2">${row.truth}<span class="truth-badge">CORRECT</span></td>`
+          : `<td class="fv2" style="color:var(--faint)">—</td>`;
+      }
+      tr.innerHTML = `<td class="fn">${row.field}</td><td class="fh">${row.hex}</td><td class="fv">${row.sent}${lieBadge}</td>${truthCell}`;
+      if (row.note) tr.title = row.note;
+      tbody.appendChild(tr);
+    });
+  });
+
+  if (f.note) {
+    const nr = document.createElement('tr');
+    nr.className = 'ft-note';
+    nr.innerHTML = `<td colspan="4">⚠ ${f.note}</td>`;
+    tbody.appendChild(nr);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// STEP EXPLAIN
+// ═══════════════════════════════════════════════════════
+function showStep(s) {
+  const el = document.getElementById('stepExplain');
+  if (!s) {
+    el.className = 'step-explain empty';
+    el.innerHTML = 'Select a mode above and click Next to begin.';
+    return;
+  }
+  el.className = 'step-explain';
+  el.innerHTML = `
+    <div class="step-lbl ${s.log.type}">${s.log.lbl}</div>
+    <div class="step-msg">${s.log.msg}</div>
+    <div class="step-det">${s.log.det}</div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// CACHE
+// ═══════════════════════════════════════════════════════
+function updateCache(entries) {
+  const strip = document.getElementById('cacheStrip');
+  const rows = document.getElementById('cacheRows');
+  if (!entries || !entries.length) {
+    strip.classList.remove('visible');
+    rows.innerHTML = '';
+    return;
+  }
+  strip.classList.add('visible');
+  rows.innerHTML = entries.map(e =>
+    `<div class="cache-row${e.poisoned ? ' poisoned' : ''}">
+      <span class="cip">${e.ip}</span>
+      <span class="cmac">${e.mac}</span>
+    </div>`
+  ).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// STEP ENGINE
+// ═══════════════════════════════════════════════════════
+// ── Repeating animation for the current step ──
+const REPLAY_INTERVAL = 3400; // ms between repeats (accommodates 4-hop misdirect relay)
+
+function firePackets(s) {
+  if (s.packet && s.from) {
+    if (s.misdirect) {
+      // 4-hop relay: hostA→sw (blue), sw→attacker (blue), attacker→sw (red), sw→hostB (red)
+      spawnPacket('hostA',    'sw',       '#4a9eff',  'DATA', 80);
+      spawnPacket('sw',       'attacker', '#4a9eff',  'DATA', 560);
+      spawnPacket('attacker', 'sw',       '#ff4d6a',  'FWD',  1040);
+      spawnPacket('sw',       'hostB',    '#ff4d6a',  'FWD',  1520);
+    } else if (s.to === 'all') {
+      // Switch flood — never back out ingress port
+      spawnPacket(s.from, 'hostB',     s.packet.color, s.packet.label, 80);
+      if (mode === 'attack') spawnPacket(s.from, 'attacker', s.packet.color, s.packet.label, 80);
+    } else if (s.via) {
+      spawnPacket(s.from, s.via, s.packet.color, s.packet.label, 80);
+      if (s.to === 'broadcast') {
+        spawnPacket(s.via, 'hostB',     s.packet.color, s.packet.label, 560);
+        if (mode === 'attack') spawnPacket(s.via, 'attacker', s.packet.color, s.packet.label, 560);
+      } else if (s.to) {
+        spawnPacket(s.via, s.to, s.packet.color, s.packet.label, 560);
+      }
+    } else {
+      // Simple single hop
+      spawnPacket(s.from, s.to, s.packet.color, s.packet.label, 80);
+    }
+  }
+  if (s.broadcast) {
+    spawnRing('sw', '#4a9eff', 380);
+    spawnRing('sw', '#4a9eff', 680);
+  }
+}
+
+function stopReplay() {
+  if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+  replaySpec = null;
+}
+
+function startReplay(s) {
+  stopReplay();
+  if (!s.packet && !s.broadcast) return; // nothing to animate
+  replaySpec = s;
+  firePackets(s);                         // fire immediately
+  replayTimer = setInterval(() => {
+    packets = []; rings = [];             // clear stale packets before each repeat
+    firePackets(replaySpec);
+  }, REPLAY_INTERVAL);
+}
+
+function applyStep(s) {
+  showStep(s);
+
+  // Frame dissector — use hasOwnProperty so omitted = no change, null = clear
+  if (s.hasOwnProperty('frame')) showFrame(s.frame);
+
+  // Cache
+  if (s.cacheA) setTimeout(() => updateCache(s.cacheA), 200);
+
+  // Start repeating animation
+  startReplay(s);
+}
+
+function replayTo(target) {
+  packets = []; rings = [];
+  updateCache([]);
+  showStep(null);
+  showFrame(null);
+
+  let lastFrameKey = null; // tracks most recent explicit frame decision
+  for (let i = 0; i <= target; i++) {
+    const s = steps[i];
+    if (s.hasOwnProperty('frame')) lastFrameKey = s.frame;
+    if (s.cacheA) updateCache(s.cacheA);
+  }
+  showStep(steps[target]);
+  showFrame(lastFrameKey);
+}
+
+function nextStep() {
+  if (currentStep >= steps.length - 1) return;
+  currentStep++;
+  applyStep(steps[currentStep]);
+  updateUI();
+}
+
+function prevStep() {
+  if (currentStep < 0) return;
+  currentStep--;
+  if (currentStep < 0) {
+    stopReplay();
+    packets = []; rings = [];
+    updateCache([]);
+    showStep(null);
+    showFrame(null);
+  } else {
+    replayTo(currentStep);
+    startReplay(steps[currentStep]);
+  }
+  updateUI();
+}
+
+function resetAll() {
+  currentStep = -1;
+  stopReplay();
+  packets = []; rings = [];
+  updateCache([]);
+  showStep(null);
+  showFrame(null);
+  updateUI();
+  if (autoTimer) toggleAuto();
+}
+
+function updateUI() {
+  const total = steps.length;
+  const isAtk = mode === 'attack';
+
+  document.getElementById('stepCounter').textContent =
+    currentStep < 0 ? 'Ready — click Next to begin' : `Step ${currentStep + 1} of ${total}`;
+
+  document.getElementById('btnPrev').disabled = currentStep < 0;
+  document.getElementById('btnNext').disabled = currentStep >= total - 1;
+  document.getElementById('btnNext').classList.toggle('atk', isAtk);
+
+  const bar = document.getElementById('stepDots');
+  bar.innerHTML = steps.map((_, i) => {
+    let c = 'dot';
+    if (i < currentStep) c += isAtk ? ' done atk' : ' done';
+    else if (i === currentStep) c += ' current';
+    return `<div class="${c}"></div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// MODE + AUTO
+// ═══════════════════════════════════════════════════════
+function setMode(m) {
+  mode = m;
+  steps = m === 'normal' ? normalSteps : attackSteps;
+  nodes.attacker.hidden = m !== 'attack';
+  document.getElementById('btnNormal').className = 'mode-btn' + (m === 'normal' ? ' active' : '');
+  document.getElementById('btnAttack').className = 'mode-btn' + (m === 'attack' ? ' active atk' : '');
+  resetAll();
+}
+
+function toggleAuto() {
+  const btn = document.getElementById('btnAuto');
+  if (autoTimer) {
+    clearInterval(autoTimer); autoTimer = null;
+    btn.textContent = '▶ Auto Play'; btn.classList.remove('running');
+  } else {
+    btn.textContent = '⏸ Pause'; btn.classList.add('running');
+    autoTimer = setInterval(() => {
+      if (currentStep >= steps.length - 1) { toggleAuto(); return; }
+      nextStep();
+    }, 2600);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+window.addEventListener('resize', resize);
+resize();
+showFrame(null);
+showStep(null);
+loop();
+updateUI();
+</script>
+</body>
+</html>
